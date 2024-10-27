@@ -1,13 +1,12 @@
 // src/services/chat_service.rs
 
-use crate::repositories::chat_repository::ChatRepository;
 use crate::models::chat_model::ChatMessage;
+use crate::repositories::chat_repository::ChatRepository;
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio_stream::StreamExt;
 use futures::stream::BoxStream;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 pub struct ChatService {
     repository: Arc<ChatRepository>,
@@ -18,9 +17,7 @@ pub struct ChatService {
 
 impl ChatService {
     pub async fn new(video_id: &str) -> Result<Self> {
-        let client = reqwest::Client::builder()
-            .cookie_store(true)
-            .build()?;
+        let client = reqwest::Client::builder().cookie_store(true).build()?;
         let repository = Arc::new(ChatRepository::new(client));
 
         // 初期データの取得

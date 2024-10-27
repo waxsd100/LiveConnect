@@ -18,7 +18,9 @@ impl ChatRepository {
 
     pub async fn get_initial_data(&self, video_id: &str) -> Result<(String, String, String)> {
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
-        let resp = self.client.get(&url)
+        let resp = self
+            .client
+            .get(&url)
             .header("User-Agent", "Mozilla/5.0")
             .send()
             .await?
@@ -27,14 +29,17 @@ impl ChatRepository {
 
         // ytInitialDataを抽出する正規表現
         let re = Regex::new(r#"var ytInitialData = (\{.*?});"#)?;
-        let caps = re.captures(&resp).ok_or_else(|| anyhow!("Failed to extract ytInitialData"))?;
+        let caps = re
+            .captures(&resp)
+            .ok_or_else(|| anyhow!("Failed to extract ytInitialData"))?;
         let yt_initial_data = &caps[1];
 
         // JSONをパース
         let v: Value = serde_json::from_str(yt_initial_data)?;
 
         // continuationトークンの取得
-        let continuation = v["contents"]["twoColumnWatchNextResults"]["conversationBar"]["liveChatRenderer"]["continuations"][0]["reloadContinuationData"]["continuation"]
+        let continuation = v["contents"]["twoColumnWatchNextResults"]["conversationBar"]
+            ["liveChatRenderer"]["continuations"][0]["reloadContinuationData"]["continuation"]
             .as_str()
             .ok_or_else(|| anyhow!("Failed to get continuation token"))?
             .to_string();
@@ -48,7 +53,8 @@ impl ChatRepository {
             .ok_or_else(|| anyhow!("Failed to extract API key"))?;
 
         // clientVersionの取得
-        let re_client_version = Regex::new(r#"["']INNERTUBE_CONTEXT_CLIENT_VERSION["']\s*:\s*["']([^"']+)["']"#)?;
+        let re_client_version =
+            Regex::new(r#"["']INNERTUBE_CONTEXT_CLIENT_VERSION["']\s*:\s*["']([^"']+)["']"#)?;
         let client_version = re_client_version
             .captures(&resp)
             .and_then(|cap| cap.get(1))
@@ -90,8 +96,8 @@ impl ChatRepository {
             .await?;
 
         let mut messages = Vec::new();
-        if let Some(actions) = resp["continuationContents"]["liveChatContinuation"]["actions"]
-            .as_array()
+        if let Some(actions) =
+            resp["continuationContents"]["liveChatContinuation"]["actions"].as_array()
         {
             for action in actions {
                 if let Some(add_chat_item_action) = action.get("addChatItemAction") {
@@ -103,9 +109,7 @@ impl ChatRepository {
                             messages.push(chat_message);
                         }
                     } else if let Some(renderer) = item.get("liveChatPaidMessageRenderer") {
-                        if let Some(chat_message) =
-                            self.parse_paid_message(renderer, "superChat")
-                        {
+                        if let Some(chat_message) = self.parse_paid_message(renderer, "superChat") {
                             messages.push(chat_message);
                         }
                     } else if let Some(renderer) = item.get("liveChatPaidStickerRenderer") {
@@ -118,11 +122,13 @@ impl ChatRepository {
                         if let Some(chat_message) = self.parse_membership_message(renderer) {
                             messages.push(chat_message);
                         }
-                    } else if let Some(renderer) = item.get("liveChatViewerEngagementMessageRenderer") {
+                    } else if let Some(renderer) =
+                        item.get("liveChatViewerEngagementMessageRenderer")
+                    {
                         if let Some(chat_message) = self.parse_viewer_engagement_message(renderer) {
                             messages.push(chat_message);
                         }
-                    } else if let Some(renderer) = item.get("liveChatPlaceholderItemRenderer") {
+                    } else if let Some(_renderer) = item.get("liveChatPlaceholderItemRenderer") {
                         // プレースホルダーメッセージは無視
                     } else {
                         // 未対応のメッセージタイプをログに出力
@@ -136,18 +142,31 @@ impl ChatRepository {
         let mut next_continuation = String::new();
         let mut timeout = 0;
 
-        if let Some(continuations) = resp["continuationContents"]["liveChatContinuation"]["continuations"].as_array() {
+        if let Some(continuations) =
+            resp["continuationContents"]["liveChatContinuation"]["continuations"].as_array()
+        {
             for continuation_data in continuations {
                 if let Some(timed_data) = continuation_data.get("timedContinuationData") {
-                    next_continuation = timed_data["continuation"].as_str().unwrap_or("").to_string();
+                    next_continuation = timed_data["continuation"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
                     timeout = timed_data["timeoutMs"].as_u64().unwrap_or(0);
                     break;
-                } else if let Some(invalidation_data) = continuation_data.get("invalidationContinuationData") {
-                    next_continuation = invalidation_data["continuation"].as_str().unwrap_or("").to_string();
+                } else if let Some(invalidation_data) =
+                    continuation_data.get("invalidationContinuationData")
+                {
+                    next_continuation = invalidation_data["continuation"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
                     timeout = invalidation_data["timeoutMs"].as_u64().unwrap_or(0);
                     break;
                 } else if let Some(reload_data) = continuation_data.get("reloadContinuationData") {
-                    next_continuation = reload_data["continuation"].as_str().unwrap_or("").to_string();
+                    next_continuation = reload_data["continuation"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
                     timeout = reload_data["timeoutMs"].as_u64().unwrap_or(0);
                     break;
                 }
@@ -182,10 +201,7 @@ impl ChatRepository {
             id: renderer["id"].as_str()?.to_string(),
             message,
             message_ex,
-            timestamp: renderer["timestampUsec"]
-                .as_str()?
-                .parse::<i64>()
-                .ok()? / 1000,
+            timestamp: renderer["timestampUsec"].as_str()?.parse::<i64>().ok()? / 1000,
             datetime: self.format_datetime(renderer["timestampUsec"].as_str()?),
             elapsed_time: None,
             amount_value: None,
@@ -210,10 +226,7 @@ impl ChatRepository {
             id: renderer["id"].as_str()?.to_string(),
             message,
             message_ex: Some(message_runs),
-            timestamp: renderer["timestampUsec"]
-                .as_str()?
-                .parse::<i64>()
-                .ok()? / 1000,
+            timestamp: renderer["timestampUsec"].as_str()?.parse::<i64>().ok()? / 1000,
             datetime: self.format_datetime(renderer["timestampUsec"].as_str()?),
             elapsed_time: None,
             amount_value: None,
@@ -267,10 +280,7 @@ impl ChatRepository {
             id: renderer["id"].as_str()?.to_string(),
             message,
             message_ex,
-            timestamp: renderer["timestampUsec"]
-                .as_str()?
-                .parse::<i64>()
-                .ok()? / 1000,
+            timestamp: renderer["timestampUsec"].as_str()?.parse::<i64>().ok()? / 1000,
             datetime: self.format_datetime(renderer["timestampUsec"].as_str()?),
             elapsed_time: None,
             amount_value,
@@ -302,10 +312,7 @@ impl ChatRepository {
             id: renderer["id"].as_str()?.to_string(),
             message,
             message_ex,
-            timestamp: renderer["timestampUsec"]
-                .as_str()?
-                .parse::<i64>()
-                .ok()? / 1000,
+            timestamp: renderer["timestampUsec"].as_str()?.parse::<i64>().ok()? / 1000,
             datetime: self.format_datetime(renderer["timestampUsec"].as_str()?),
             elapsed_time: None,
             amount_value: None,
@@ -346,20 +353,29 @@ impl ChatRepository {
                     if let Some(icon) = badge_renderer.get("icon") {
                         badge_url = icon["thumbnails"][0]["url"].as_str().map(|s| s.to_string());
                     } else if let Some(custom_thumbnail) = badge_renderer.get("customThumbnail") {
-                        badge_url = custom_thumbnail["thumbnails"][0]["url"].as_str().map(|s| s.to_string());
+                        badge_url = custom_thumbnail["thumbnails"][0]["url"]
+                            .as_str()
+                            .map(|s| s.to_string());
                     }
 
                     // バッジのラベルを取得
-                    if let Some(label) = badge_renderer["accessibility"]["accessibilityData"]["label"].as_str() {
+                    if let Some(label) =
+                        badge_renderer["accessibility"]["accessibilityData"]["label"].as_str()
+                    {
                         let label_lower = label.to_lowercase();
                         // ラベルに応じてフラグを設定
-                        if label_lower.contains("verified") || label_lower.contains("認証済み") {
+                        if label_lower.contains("verified") || label_lower.contains("認証済み")
+                        {
                             is_verified = true;
-                        } else if label_lower.contains("moderator") || label_lower.contains("モデレーター") {
+                        } else if label_lower.contains("moderator")
+                            || label_lower.contains("モデレーター")
+                        {
                             is_chat_moderator = true;
-                        } else if label_lower.contains("owner") || label_lower.contains("所有者") {
+                        } else if label_lower.contains("owner") || label_lower.contains("所有者")
+                        {
                             is_chat_owner = true;
-                        } else if label_lower.contains("member") || label_lower.contains("メンバー") {
+                        } else if label_lower.contains("member") || label_lower.contains("メンバー")
+                        {
                             is_chat_sponsor = true;
                         }
                     }

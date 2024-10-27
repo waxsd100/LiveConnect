@@ -1,6 +1,6 @@
 // src/controllers/chat_controller.rs
 
-use crate::services::chat_service::ChatService;
+use crate::services::{chat_service::ChatService, minecraft_service::MinecraftService};
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use crate::models::chat_model::ChatMessage;
@@ -9,11 +9,12 @@ use anyhow::Result;
 
 pub struct ChatController {
     chat_service: Arc<ChatService>,
+    minecraft_service: Arc<MinecraftService>,
 }
 
 impl ChatController {
-    pub fn new(chat_service: Arc<ChatService>) -> Self {
-        Self { chat_service }
+    pub fn new(chat_service: Arc<ChatService>, minecraft_service: Arc<MinecraftService>) -> Self {
+        Self { chat_service, minecraft_service }
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -28,6 +29,11 @@ impl ChatController {
                     let log_message = format_log_message(&message);
                     // ログの出力
                     println!("{}", log_message);
+
+                    // Minecraftサーバーへメッセージを送信
+                    if let Err(e) = self.minecraft_service.send_chat_message(&log_message).await {
+                        eprintln!("Error sending to Minecraft: {}", e);
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error: {}", e);
